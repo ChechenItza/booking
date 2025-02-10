@@ -1,0 +1,5 @@
+package grpcsrv
+
+func main() {
+
+}

@@ -1,4 +1,4 @@
-module github.com/ChechenItza/resource-booking
+module github.com/ChechenItza/booking
 
 go 1.23.1
 

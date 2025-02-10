@@ -1,7 +1,7 @@
 package booking
 
 import (
-	"github.com/ChechenItza/resource-booking/internal/data"
+	"github.com/ChechenItza/booking/internal/data"
 	"time"
 )
 
@@ -38,7 +38,7 @@ func (b *BookingService) Create(userId, resourceId, resourceCapacity int, startA
 		//TODO: retry in certain conditions
 		return 0, err
 	}
-	
+
 	return id, nil
 }
 

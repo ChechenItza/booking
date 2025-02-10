@@ -29,6 +29,18 @@ SET default_tablespace = '';
 SET default_table_access_method = heap;
 
 --
+-- Name: booking_count; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.booking_count (
+    resource_id integer NOT NULL,
+    count integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: bookings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -38,8 +50,8 @@ CREATE TABLE public.bookings (
     resource_id integer NOT NULL,
     start_at timestamp with time zone NOT NULL,
     end_at timestamp with time zone NOT NULL,
-    created_at timestamp with time zone NOT NULL,
-    updated_at timestamp with time zone NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -64,6 +76,14 @@ ALTER TABLE public.bookings ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY (
 CREATE TABLE public.schema_migrations (
     version character varying(128) NOT NULL
 );
+
+
+--
+-- Name: booking_count booking_count_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.booking_count
+    ADD CONSTRAINT booking_count_pkey PRIMARY KEY (resource_id);
 
 
 --
@@ -100,4 +120,7 @@ ALTER TABLE ONLY public.schema_migrations
 --
 
 INSERT INTO public.schema_migrations (version) VALUES
-    ('20250210100001');
+    ('20250210100001'),
+    ('20250210110934'),
+    ('20250210111727'),
+    ('20250210113040');

@@ -89,22 +89,6 @@ func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt,
 		return 0, ErrCapReached
 	}
 
-	checkConflictQuery := `
-		SELECT EXISTS(
-			SELECT 1 
-			FROM bookings 
-			WHERE resource_id = $1 AND $2 < end_at AND $3 > start_at
-		)
-	`
-	var exists bool
-	err = m.pool.QueryRow(context.TODO(), checkConflictQuery, resourceId, startAt, endAt).Scan(&exists)
-	if err != nil {
-		return 0, err
-	}
-	if exists {
-		return 0, ErrTimeConflict
-	}
-
 	insertQuery := `
 		INSERT 
 		INTO bookings (user_id, resource_id, start_at, end_at)
@@ -124,7 +108,7 @@ func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt,
 	incCountQuery := `
 		UPDATE booking_count
 		SET count = count + 1
-		WHERE resource_id = $1
+		WHERE resource_id = $1 
 	`
 	ct, err := tx.Exec(context.TODO(), incCountQuery)
 	if err != nil {

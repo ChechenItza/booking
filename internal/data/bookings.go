@@ -93,7 +93,6 @@ func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt,
 		INSERT 
 		INTO bookings (user_id, resource_id, start_at, end_at)
 		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (user_id, resource_id, start_at, end_at) DO NOTHING
 		RETURNING id
 	`
 	var id int

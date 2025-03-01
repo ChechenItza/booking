@@ -1,48 +1,52 @@
 package booking
 
 import (
+	"context"
+	"errors"
 	"github.com/ChechenItza/booking/internal/data"
 	"time"
 )
 
-type BookingInfo struct {
+var (
+	ErrStorageTimeout = errors.New("storage timeout")
+)
+
+type Info struct {
 	Id         int
 	ResourceId int
 	StartAt    time.Time
 	EndAt      time.Time
 }
 
-//type BookingService interface {
-//	Create(userId int, resourceId int, startAt time.Time, endAt time.Time) (int, error)
-//	ListByUserId(userId int) ([]BookingInfo, error)
-//	ListByResourceIds(resourceIds []int) ([]BookingInfo, error)
-//	Remove(bookingId int) error
-//}
-
-/*
-QUESTIONS:
-1. transactions between repo functions
-*/
-
-type BookingService struct {
+type Service struct {
 	models data.Models
 }
 
-func NewBookingService(models data.Models) BookingService {
-	return BookingService{models}
+func NewService(models data.Models) Service {
+	return Service{models}
 }
 
-func (b *BookingService) Create(userId, resourceId, resourceCapacity int, startAt, endAt time.Time) (int, error) {
-	id, err := b.models.Bookings.Create(userId, resourceId, resourceCapacity, startAt, endAt)
-	if err != nil {
-		//TODO: retry in certain conditions
-		return 0, err
+func (b *Service) Create(ctx context.Context, userId, resourceId, resourceCapacity int, startAt, endAt time.Time) (int, error) {
+	type CreateResult struct {
+		id  int
+		err error
 	}
 
-	return id, nil
+	res := make(chan CreateResult)
+	go func() {
+		id, err := b.models.Bookings.Create(ctx, userId, resourceId, resourceCapacity, startAt, endAt)
+		res <- CreateResult{id, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return 0, ErrStorageTimeout
+	case r := <-res:
+		return r.id, r.err
+	}
 }
 
-func (b *BookingService) ListByUserId(userId int) ([]BookingInfo, error) {
+func (b *Service) ListByUserId(userId int) ([]Info, error) {
 	bookings, err := b.models.Bookings.ListByUserId(userId)
 	if err != nil {
 		return nil, err
@@ -51,17 +55,28 @@ func (b *BookingService) ListByUserId(userId int) ([]BookingInfo, error) {
 	return fromDataBookingsToBookingInfos(bookings), nil
 }
 
-func (b *BookingService) ListByResourceIds(resourceIds []int) ([]BookingInfo, error) {
-	bookings, err := b.models.Bookings.ListByResourceIds(resourceIds)
-	if err != nil {
-		return nil, err
+func (b *Service) ListByResourceIds(ctx context.Context, resourceIds []int32) ([]Info, error) {
+	type ListByResourceIdsRes struct {
+		bookings []data.Booking
+		err      error
 	}
 
-	return fromDataBookingsToBookingInfos(bookings), nil
+	res := make(chan ListByResourceIdsRes)
+	go func() {
+		bookings, err := b.models.Bookings.ListByResourceIds(resourceIds)
+		res <- ListByResourceIdsRes{bookings, err}
+	}()
+
+	select {
+	case <-ctx.Done():
+		return nil, ErrStorageTimeout
+	case r := <-res:
+		return fromDataBookingsToBookingInfos(r.bookings), nil
+	}
 }
 
-func fromDataBookingToBookingInfo(booking data.Booking) BookingInfo {
-	return BookingInfo{
+func fromDataBookingToBookingInfo(booking data.Booking) Info {
+	return Info{
 		Id:         booking.Id,
 		ResourceId: booking.ResourceId,
 		StartAt:    booking.StartAt,
@@ -69,8 +84,8 @@ func fromDataBookingToBookingInfo(booking data.Booking) BookingInfo {
 	}
 }
 
-func fromDataBookingsToBookingInfos(bookings []data.Booking) []BookingInfo {
-	bookingInfos := make([]BookingInfo, len(bookings))
+func fromDataBookingsToBookingInfos(bookings []data.Booking) []Info {
+	bookingInfos := make([]Info, len(bookings))
 	for i, booking := range bookings {
 		bookingInfos[i] = fromDataBookingToBookingInfo(booking)
 	}

@@ -3,7 +3,9 @@ package data
 import (
 	"context"
 	"errors"
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
 )
@@ -19,11 +21,11 @@ type BookingModel struct {
 	pool *pgxpool.Pool
 }
 
-func (m *BookingModel) ListByResourceIds(ids []int) ([]Booking, error) {
+func (m *BookingModel) ListByResourceIds(ids []int32) ([]Booking, error) {
 	getQuery := `
 		SELECT id, resource_id, start_at, end_at
 		FROM bookings b
-		WHERE b.resource_id in ($1)
+		WHERE b.resource_id = any($1)
 	`
 	rows, err := m.pool.Query(context.TODO(), getQuery, ids)
 	if err != nil {
@@ -63,7 +65,7 @@ func (m *BookingModel) ListByUserId(userId int) ([]Booking, error) {
 	return bookings, nil
 }
 
-func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt, endAt time.Time) (int, error) {
+func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, startAt, endAt time.Time) (int, error) {
 	tx, err := m.pool.BeginTx(context.TODO(), pgx.TxOptions{}) //TODO: no auto rollback on ctx timeout????
 	if err != nil {
 		return 0, err
@@ -79,13 +81,20 @@ func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt,
 	`
 	var count int
 	err = tx.QueryRow(context.TODO(), countQuery, resourceId).Scan(&count)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrRecordNotFound
+	if errors.Is(err, pgx.ErrNoRows) {
+		insertQuery := `
+			INSERT INTO booking_count (resource_id, count, created_at)
+			VALUES ($1, 0, now())
+			RETURNING count
+		`
+		err = tx.QueryRow(context.TODO(), insertQuery, resourceId).Scan(&count)
+		if err != nil {
+			return 0, err
 		}
+	} else if err != nil {
 		return 0, err
 	}
-	if count >= resourceCapacity {
+	if count >= cap {
 		return 0, ErrCapReached
 	}
 
@@ -98,23 +107,23 @@ func (m *BookingModel) Create(userId, resourceId, resourceCapacity int, startAt,
 	var id int
 	err = tx.QueryRow(context.TODO(), insertQuery, userId, resourceId, startAt, endAt).Scan(&id)
 	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return 0, ErrAlreadyExists
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == pgerrcode.ExclusionViolation {
+				return 0, ErrTimeConflict
+			}
 		}
 		return 0, err
 	}
 
 	incCountQuery := `
 		UPDATE booking_count
-		SET count = count + 1
+		SET count = count + 1, updated_at = now()
 		WHERE resource_id = $1 
 	`
-	ct, err := tx.Exec(context.TODO(), incCountQuery)
+	_, err = tx.Exec(context.TODO(), incCountQuery, resourceId)
 	if err != nil {
 		return 0, err
-	}
-	if ct.RowsAffected() == 0 {
-		return 0, ErrRecordNotFound
 	}
 
 	err = tx.Commit(context.TODO())

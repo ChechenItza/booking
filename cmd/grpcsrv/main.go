@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/ChechenItza/booking/internal/booking"
 	"github.com/ChechenItza/booking/internal/data"
-	pb "github.com/ChechenItza/protobufs/v2/booking"
+	pb "github.com/ChechenItza/protobufs/gen/go/booking/v1"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
@@ -16,7 +16,7 @@ import (
 )
 
 type BookingServer struct {
-	pb.UnimplementedBookingServer
+	pb.UnimplementedBookingServiceServer
 	booking booking.Service
 	logger  zerolog.Logger
 }
@@ -45,7 +45,7 @@ func main() {
 		grpc.UnaryInterceptor(srv.LoggingInterceptor()),
 	)
 
-	pb.RegisterBookingServer(grpcServer, &srv)
+	pb.RegisterBookingServiceServer(grpcServer, &srv)
 	srv.logger.Info().Msg("gRPC server is running on :50051")
 
 	go func() {

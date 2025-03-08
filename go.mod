@@ -3,11 +3,12 @@ module github.com/ChechenItza/booking
 go 1.23.1
 
 require (
-	github.com/ChechenItza/protobufs/v2 v2.1.0
+	github.com/ChechenItza/protobufs v1.0.1
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jackc/pgx/v5 v5.7.2
 	github.com/rs/zerolog v1.33.0
-	google.golang.org/grpc v1.70.0
+	google.golang.org/grpc v1.71.0
+	google.golang.org/protobuf v1.36.5
 )
 
 require (
@@ -22,5 +23,4 @@ require (
 	golang.org/x/sys v0.30.0 // indirect
 	golang.org/x/text v0.22.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250207221924-e9438ea467c6 // indirect
-	google.golang.org/protobuf v1.36.5 // indirect
 )

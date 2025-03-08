@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"github.com/ChechenItza/booking/internal/booking"
-	pb "github.com/ChechenItza/protobufs/v2/booking"
+	pb "github.com/ChechenItza/protobufs/gen/go/booking/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

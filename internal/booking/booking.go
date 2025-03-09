@@ -2,13 +2,8 @@ package booking
 
 import (
 	"context"
-	"errors"
 	"github.com/ChechenItza/booking/internal/data"
 	"time"
-)
-
-var (
-	ErrStorageTimeout = errors.New("storage timeout")
 )
 
 type Info struct {
@@ -27,52 +22,21 @@ func NewService(models data.Models) Service {
 }
 
 func (b *Service) Create(ctx context.Context, userId, resourceId, resourceCapacity int, startAt, endAt time.Time) (int, error) {
-	type CreateResult struct {
-		id  int
-		err error
+	id, err := b.models.Bookings.Create(ctx, userId, resourceId, resourceCapacity, startAt, endAt)
+	if err != nil {
+		return 0, err
 	}
 
-	res := make(chan CreateResult)
-	go func() {
-		id, err := b.models.Bookings.Create(ctx, userId, resourceId, resourceCapacity, startAt, endAt)
-		res <- CreateResult{id, err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return 0, ErrStorageTimeout
-	case r := <-res:
-		return r.id, r.err
-	}
+	return id, err
 }
 
-func (b *Service) ListByUserId(userId int) ([]Info, error) {
-	bookings, err := b.models.Bookings.ListByUserId(userId)
+func (b *Service) ListByResourceIds(ctx context.Context, resourceIds []int32) ([]Info, error) {
+	bookings, err := b.models.Bookings.ListByResourceIds(ctx, resourceIds)
 	if err != nil {
 		return nil, err
 	}
 
 	return fromDataBookingsToBookingInfos(bookings), nil
-}
-
-func (b *Service) ListByResourceIds(ctx context.Context, resourceIds []int32) ([]Info, error) {
-	type ListByResourceIdsRes struct {
-		bookings []data.Booking
-		err      error
-	}
-
-	res := make(chan ListByResourceIdsRes)
-	go func() {
-		bookings, err := b.models.Bookings.ListByResourceIds(resourceIds)
-		res <- ListByResourceIdsRes{bookings, err}
-	}()
-
-	select {
-	case <-ctx.Done():
-		return nil, ErrStorageTimeout
-	case r := <-res:
-		return fromDataBookingsToBookingInfos(r.bookings), nil
-	}
 }
 
 func fromDataBookingToBookingInfo(booking data.Booking) Info {

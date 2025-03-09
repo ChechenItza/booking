@@ -21,13 +21,13 @@ type BookingModel struct {
 	pool *pgxpool.Pool
 }
 
-func (m *BookingModel) ListByResourceIds(ids []int32) ([]Booking, error) {
+func (m *BookingModel) ListByResourceIds(ctx context.Context, ids []int32) ([]Booking, error) {
 	getQuery := `
 		SELECT id, resource_id, start_at, end_at
 		FROM bookings b
 		WHERE b.resource_id = any($1)
 	`
-	rows, err := m.pool.Query(context.TODO(), getQuery, ids)
+	rows, err := m.pool.Query(ctx, getQuery, ids)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -43,13 +43,13 @@ func (m *BookingModel) ListByResourceIds(ids []int32) ([]Booking, error) {
 	return bookings, nil
 }
 
-func (m *BookingModel) ListByUserId(userId int) ([]Booking, error) {
+func (m *BookingModel) ListByUserId(ctx context.Context, userId int) ([]Booking, error) {
 	getQuery := `
 		SELECT id, resource_id, start_at, end_at
 		FROM bookings b
 		WHERE b.user_id = $1
 	`
-	rows, err := m.pool.Query(context.TODO(), getQuery, userId)
+	rows, err := m.pool.Query(ctx, getQuery, userId)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrRecordNotFound
@@ -66,11 +66,11 @@ func (m *BookingModel) ListByUserId(userId int) ([]Booking, error) {
 }
 
 func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, startAt, endAt time.Time) (int, error) {
-	tx, err := m.pool.BeginTx(context.TODO(), pgx.TxOptions{}) //TODO: no auto rollback on ctx timeout????
+	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{}) //TODO: no auto rollback on ctx timeout????
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(context.TODO()) //TODO: maybe log error
+	defer tx.Rollback(ctx) //TODO: maybe log error
 
 	// TODO: this is pessimistic locking, maybe think about changing to optimistic locking
 	countQuery := `
@@ -80,18 +80,11 @@ func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, 
 		FOR UPDATE
 	`
 	var count int
-	err = tx.QueryRow(context.TODO(), countQuery, resourceId).Scan(&count)
-	if errors.Is(err, pgx.ErrNoRows) {
-		insertQuery := `
-			INSERT INTO booking_count (resource_id, count, created_at)
-			VALUES ($1, 0, now())
-			RETURNING count
-		`
-		err = tx.QueryRow(context.TODO(), insertQuery, resourceId).Scan(&count)
-		if err != nil {
-			return 0, err
+	err = tx.QueryRow(ctx, countQuery, resourceId).Scan(&count)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrRecordNotFound
 		}
-	} else if err != nil {
 		return 0, err
 	}
 	if count >= cap {
@@ -105,7 +98,7 @@ func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, 
 		RETURNING id
 	`
 	var id int
-	err = tx.QueryRow(context.TODO(), insertQuery, userId, resourceId, startAt, endAt).Scan(&id)
+	err = tx.QueryRow(ctx, insertQuery, userId, resourceId, startAt, endAt).Scan(&id)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) {
@@ -121,12 +114,12 @@ func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, 
 		SET count = count + 1, updated_at = now()
 		WHERE resource_id = $1 
 	`
-	_, err = tx.Exec(context.TODO(), incCountQuery, resourceId)
+	_, err = tx.Exec(ctx, incCountQuery, resourceId)
 	if err != nil {
 		return 0, err
 	}
 
-	err = tx.Commit(context.TODO())
+	err = tx.Commit(ctx)
 	if err != nil {
 		return 0, err
 	}

@@ -8,7 +8,6 @@ import (
 var (
 	ErrRecordNotFound = errors.New("record not found")
 	ErrCapReached     = errors.New("capacity reached")
-	ErrAlreadyExists  = errors.New("already exists")
 	ErrTimeConflict   = errors.New("conflicting time already booked on the resource")
 )
 

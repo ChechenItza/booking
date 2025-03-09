@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"github.com/ChechenItza/booking/internal/booking"
+	"github.com/ChechenItza/booking/internal/data"
 	pb "github.com/ChechenItza/protobufs/gen/go/booking/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -24,7 +26,6 @@ func (bs *BookingServer) CreateBooking(ctx context.Context, req *pb.CreateBookin
 	if req.StartAt == nil || req.EndAt == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "start_at and end_at must be provided")
 	}
-
 	startAt := req.StartAt.AsTime()
 	endAt := req.EndAt.AsTime()
 	if !endAt.After(startAt) {
@@ -33,7 +34,20 @@ func (bs *BookingServer) CreateBooking(ctx context.Context, req *pb.CreateBookin
 
 	id, err := bs.booking.Create(ctx, int(req.UserId), int(req.ResourceId), int(req.ResourceCapacity), startAt, endAt)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		switch {
+		case errors.Is(err, context.DeadlineExceeded):
+			bs.logger.Warn().Err(err).Msg("context cancelled when creating booking")
+			return nil, status.Error(codes.DeadlineExceeded, err.Error())
+		case errors.Is(err, data.ErrRecordNotFound):
+			return nil, status.Error(codes.NotFound, err.Error())
+		case errors.Is(err, data.ErrCapReached):
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		case errors.Is(err, data.ErrTimeConflict):
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		default:
+			bs.logger.Err(err).Msg("internal error creating booking")
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 
 	return &pb.CreateBookingResponse{BookingId: int32(id)}, nil

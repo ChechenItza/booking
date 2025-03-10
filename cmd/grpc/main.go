@@ -22,7 +22,8 @@ type BookingServer struct {
 }
 
 func main() {
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	prettyLogger := zerolog.NewConsoleWriter()
+	logger := zerolog.New(prettyLogger).With().Timestamp().Logger()
 
 	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {

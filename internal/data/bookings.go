@@ -22,6 +22,9 @@ type BookingModel struct {
 }
 
 func (m *BookingModel) ListByResourceIds(ctx context.Context, ids []int32) ([]Booking, error) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
 	getQuery := `
 		SELECT id, resource_id, start_at, end_at
 		FROM bookings b
@@ -43,36 +46,16 @@ func (m *BookingModel) ListByResourceIds(ctx context.Context, ids []int32) ([]Bo
 	return bookings, nil
 }
 
-func (m *BookingModel) ListByUserId(ctx context.Context, userId int) ([]Booking, error) {
-	getQuery := `
-		SELECT id, resource_id, start_at, end_at
-		FROM bookings b
-		WHERE b.user_id = $1
-	`
-	rows, err := m.pool.Query(ctx, getQuery, userId)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrRecordNotFound
-		}
-		return nil, err
-	}
-
-	bookings, err := pgx.CollectRows(rows, pgx.RowToStructByNameLax[Booking])
-	if err != nil {
-		return nil, err
-	}
-
-	return bookings, nil
-}
-
 func (m *BookingModel) Create(ctx context.Context, userId, resourceId, cap int, startAt, endAt time.Time) (int, error) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
 	tx, err := m.pool.BeginTx(ctx, pgx.TxOptions{}) //TODO: no auto rollback on ctx timeout????
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx) //TODO: maybe log error
+	defer tx.Rollback(ctx)
 
-	// TODO: this is pessimistic locking, maybe think about changing to optimistic locking
 	countQuery := `
 		SELECT count
 		FROM booking_count

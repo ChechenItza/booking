@@ -6,7 +6,6 @@ import (
 	"github.com/ChechenItza/booking/internal/booking"
 	"github.com/ChechenItza/booking/internal/data"
 	pb "github.com/ChechenItza/protobufs/gen/go/booking/v1"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -21,31 +20,29 @@ func (bs *BookingServer) CreateBooking(ctx context.Context, req *pb.CreateBookin
 		return nil, status.Errorf(codes.InvalidArgument, "resource_id must be positive")
 	}
 	if req.ResourceCapacity <= 0 {
-		return nil, status.Errorf(codes.InvalidArgument, "resource_capacity must be positive")
+		return nil, status.Error(codes.InvalidArgument, "resource_capacity must be positive")
 	}
 	if req.StartAt == nil || req.EndAt == nil {
-		return nil, status.Errorf(codes.InvalidArgument, "start_at and end_at must be provided")
+		return nil, status.Error(codes.InvalidArgument, "start_at and end_at must be provided")
 	}
 	startAt := req.StartAt.AsTime()
 	endAt := req.EndAt.AsTime()
 	if !endAt.After(startAt) {
-		return nil, status.Errorf(codes.InvalidArgument, "end_at must be after start_at")
+		return nil, status.Error(codes.InvalidArgument, "end_at must be after start_at")
 	}
 
 	id, err := bs.booking.Create(ctx, int(req.UserId), int(req.ResourceId), int(req.ResourceCapacity), startAt, endAt)
 	if err != nil {
 		switch {
-		case errors.Is(err, context.DeadlineExceeded):
-			bs.logger.Warn().Err(err).Msg("context cancelled when creating booking")
-			return nil, status.Error(codes.DeadlineExceeded, err.Error())
-		case errors.Is(err, data.ErrRecordNotFound):
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			return nil, status.Error(codes.DeadlineExceeded, "timeout")
+		case errors.Is(err, booking.ErrResourceNotFound):
 			return nil, status.Error(codes.NotFound, err.Error())
 		case errors.Is(err, data.ErrCapReached):
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		case errors.Is(err, data.ErrTimeConflict):
 			return nil, status.Error(codes.FailedPrecondition, err.Error())
 		default:
-			bs.logger.Err(err).Msg("internal error creating booking")
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 	}
@@ -58,41 +55,22 @@ func (bs *BookingServer) GetBookingsByResource(ctx context.Context, req *pb.GetB
 		return nil, status.Errorf(codes.InvalidArgument, "resource_ids must be provided")
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+	defer cancel()
+
 	bookings, err := bs.booking.ListByResourceIds(ctx, req.ResourceIds)
 	if err != nil {
-		//TODO: switch on errors
-		return nil, status.Error(codes.Internal, err.Error())
+		switch {
+		case errors.Is(ctx.Err(), context.DeadlineExceeded):
+			return nil, status.Error(codes.DeadlineExceeded, "timeout")
+		case errors.Is(err, data.ErrRecordNotFound):
+			return nil, status.Error(codes.NotFound, err.Error())
+		default:
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 	}
 
 	return &pb.GetBookingsByResourceResponse{Bookings: fromBookingInfoToGrpcInfo(bookings)}, nil
-}
-
-func (bs *BookingServer) LoggingInterceptor() grpc.UnaryServerInterceptor {
-	return func(
-		ctx context.Context,
-		req interface{},
-		info *grpc.UnaryServerInfo,
-		handler grpc.UnaryHandler,
-	) (interface{}, error) {
-		start := time.Now()
-		bs.logger.Info().Str("method", info.FullMethod).Msg("incoming request")
-
-		resp, err := handler(ctx, req)
-
-		if err != nil {
-			bs.logger.Error().
-				Str("method", info.FullMethod).
-				Err(err).
-				Dur("duration", time.Since(start)).
-				Msg("failed to handle request")
-		} else {
-			bs.logger.Info().
-				Str("method", info.FullMethod).
-				Dur("duration", time.Since(start)).
-				Msg("request completed")
-		}
-		return resp, err
-	}
 }
 
 func fromBookingInfoToGrpcInfo(bookings []booking.Info) []*pb.BookingInfo {

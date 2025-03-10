@@ -2,8 +2,14 @@ package booking
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/ChechenItza/booking/internal/data"
 	"time"
+)
+
+var (
+	ErrResourceNotFound = errors.New("resource not found")
 )
 
 type Info struct {
@@ -24,7 +30,12 @@ func NewService(models data.Models) Service {
 func (b *Service) Create(ctx context.Context, userId, resourceId, resourceCapacity int, startAt, endAt time.Time) (int, error) {
 	id, err := b.models.Bookings.Create(ctx, userId, resourceId, resourceCapacity, startAt, endAt)
 	if err != nil {
-		return 0, err
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			return 0, ErrResourceNotFound
+		default:
+			return 0, fmt.Errorf("err while creating booking: %w", err)
+		}
 	}
 
 	return id, err
@@ -33,7 +44,12 @@ func (b *Service) Create(ctx context.Context, userId, resourceId, resourceCapaci
 func (b *Service) ListByResourceIds(ctx context.Context, resourceIds []int32) ([]Info, error) {
 	bookings, err := b.models.Bookings.ListByResourceIds(ctx, resourceIds)
 	if err != nil {
-		return nil, err
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			return nil, ErrResourceNotFound
+		default:
+			return nil, err
+		}
 	}
 
 	return fromDataBookingsToBookingInfos(bookings), nil

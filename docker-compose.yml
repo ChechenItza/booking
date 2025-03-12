@@ -1,7 +1,7 @@
 services:
-  postgres:
+  db:
     image: postgres:latest
-    container_name: postgres-db
+    container_name: "booking-db"
     restart: always
     environment:
       - POSTGRES_USER=admin
@@ -11,6 +11,9 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-
+  grpc:
+    build: .
+    depends_on:
+      - db
 volumes:
   pgdata:

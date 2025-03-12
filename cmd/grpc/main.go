@@ -30,7 +30,7 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to listen")
 	}
 
-	pool, err := openDB("postgresql://admin:admin@127.0.0.1:5432/booking")
+	pool, err := openDB("postgresql://admin:admin@booking-db:5432/booking")
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to db")
 	}

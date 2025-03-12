@@ -49,18 +49,17 @@ func main() {
 	pb.RegisterBookingServiceServer(grpcServer, &srv)
 	srv.logger.Info().Msg("gRPC server is running on :50051")
 
+	quit := make(chan os.Signal, 1)
 	go func() {
-		if err := grpcServer.Serve(lis); err != nil {
-			logger.Fatal().Err(err).Msg("failed to serve")
-		}
+		signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+		s := <-quit
+		logger.Warn().Msgf("%v signal received, initiating graceful shutdown", s)
+		grpcServer.GracefulStop()
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-	logger.Warn().Msg("Shutdown signal received, initiating graceful shutdown")
-	grpcServer.GracefulStop()
-
+	if err := grpcServer.Serve(lis); err != nil {
+		logger.Fatal().Err(err).Msg("failed to serve")
+	}
 	logger.Warn().Msg("gRPC server shutdown complete")
 }
 

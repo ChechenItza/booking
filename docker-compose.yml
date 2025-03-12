@@ -12,6 +12,8 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
   grpc:
+    ports:
+      - "50051:50051"
     build: .
     depends_on:
       - db

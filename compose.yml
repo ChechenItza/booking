@@ -1,0 +1,46 @@
+services:
+  db:
+    image: postgres:latest
+    container_name: "booking-db"
+    restart: always
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_DB=booking
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+  grpc:
+    ports:
+      - "50051:50051"
+    build: .
+    depends_on:
+      - db
+    develop:
+      watch:
+        - action: rebuild
+          path: .
+    labels: { logging: "promtail" }
+  loki:
+    image: grafana/loki:3.3.2
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+  promtail:
+    image: grafana/promtail:3.3.2
+    command: -config.file=/etc/promtail/docker-config.yml
+    volumes:
+      - ${PWD}/config/promtail.yaml:/etc/promtail/docker-config.yml
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - loki
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - ${PWD}/config/grafana.yaml:/etc/grafana/provisioning/datasources/datasources.yml
+volumes:
+  pgdata:
